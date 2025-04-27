@@ -1,38 +1,3 @@
-# from transformers import AutoTokenizer, AutoModelForCausalLM
-# import torch
-#
-# # Load model and tokenizer once
-# model_id = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-# tokenizer = AutoTokenizer.from_pretrained(model_id)
-# model = AutoModelForCausalLM.from_pretrained(
-#     model_id,
-#     torch_dtype=torch.float16,
-#     device_map="auto"
-# )
-#
-# def summarize_chunks_with_tinyllama(chunks):
-#     def format_prompt(text):
-#         return f"<|user|>\nsummarize the following youtube chunk of the video:\n\n{text}\n<|assistant|>\n"
-#
-#     summaries = []
-#     for chunk in chunks:
-#         prompt = format_prompt(chunk)
-#         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-#
-#         with torch.no_grad():
-#             outputs = model.generate(
-#                 inputs["input_ids"],
-#                 max_new_tokens=100,
-#                 temperature=0.7,
-#                 top_p=0.95,
-#                 do_sample=True,
-#                 pad_token_id=tokenizer.eos_token_id
-#             )
-#
-#         summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
-#         summaries.append(summary.split('<|assistant|>')[-1].strip())
-#     return summaries
-
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 

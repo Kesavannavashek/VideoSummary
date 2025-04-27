@@ -85,12 +85,3 @@ def get_timestamped_chunks(info, chunked_subs):
 
     return results
 
-
-# def split_into_chunks(text, chunk_size=200, overlap=50):
-#     """Splits text into overlapping chunks."""
-#     words = text.split()
-#     chunks = []
-#     for i in range(0, len(words), chunk_size - overlap):
-#         chunk = " ".join(words[i:i + chunk_size])
-#         chunks.append(chunk)
-#     return chunks
