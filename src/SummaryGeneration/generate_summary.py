@@ -1,7 +1,6 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
-# Load model and tokenizer
 model_id = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
@@ -12,9 +11,9 @@ model = AutoModelForCausalLM.from_pretrained(
 
 def summarize_matched_data(matched_data):
     summaries = []
-
+    print(f"Model is on device: {model.device}")
     for text, ocr_texts in matched_data:
-        # Merge OCR texts
+
         if ocr_texts:
             ocr_content = "\n".join(ocr_texts)
             prompt = (
@@ -33,10 +32,10 @@ def summarize_matched_data(matched_data):
                 "<|assistant|>\n"
             )
 
-        # Tokenize input
+
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-        # Generate summary
+
         with torch.no_grad():
             output = model.generate(
                 **inputs,
@@ -47,7 +46,7 @@ def summarize_matched_data(matched_data):
                 pad_token_id=tokenizer.eos_token_id
             )
 
-        # Decode and clean
+
         decoded = tokenizer.decode(output[0], skip_special_tokens=True)
         summary = decoded.split('<|assistant|>')[-1].strip()
         print("Summary: ",summary)
@@ -55,14 +54,3 @@ def summarize_matched_data(matched_data):
 
     return summaries
 
-# Example usage
-if __name__ == "__main__":
-    matched_data = [
-        ("everyone welcome back to my channel...", ["welcome text", "bootcamp intro"]),
-        ("in today's video we will learn trees...", ["binary trees", "leaf nodes"]),
-    ]
-
-    results = summarize_matched_data(matched_data)
-
-    for idx, summary in enumerate(results):
-        print(f"Summary {idx + 1}: {summary}\n")

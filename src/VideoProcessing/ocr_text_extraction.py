@@ -5,11 +5,11 @@ import logging
 ocr = PaddleOCR(
     use_angle_cls=True,
     use_gpu=True,
-    det_db_box_thresh=0.2,  # Lower threshold = detect more subtle text boxes
-    rec_algorithm='CRNN',   # CRNN is better for structured (code-like) text
-    det_db_unclip_ratio=2.0, # Expands boxes to capture full words
-    max_text_length=100,    # Allow longer text lines
-    use_space_char=True     # Recognize spaces properly
+    det_db_box_thresh=0.2,
+    rec_algorithm='CRNN',
+    det_db_unclip_ratio=2.0,
+    max_text_length=100,
+    use_space_char=True
 )
 
 
@@ -24,16 +24,14 @@ def extract_text_from_frame(frame):
 
     for line in lines:
         text = line[1][0]
-        # Simple heuristic: count leading spaces based on x position
         x_positions = [pt[0] for pt in line[0]]
         min_x = min(x_positions)
 
-        indent_level = int(min_x // 20)  # tweak 20 based on your video width
-        indentation = " " * (indent_level * 2)  # 2 spaces per indent
+        indent_level = int(min_x // 20)
+        indentation = " " * (indent_level * 2)
 
         formatted_lines.append(f"{indentation}{text}")
 
-    # Join the lines with newlines
     formatted_text = "\n".join(formatted_lines)
     return formatted_text
 
@@ -41,7 +39,6 @@ def match_subs_with_ocr(subs, ocr_data):
     subs = [(d['start'], d['end'], d['text']) for d in subs if d]
     matched = []
     for start, end, text in subs:
-        # Collect all OCR texts within the start-end window
         collected_texts = [ocr_text for ts, ocr_text in ocr_data if start <= ts <= end]
 
         if collected_texts:

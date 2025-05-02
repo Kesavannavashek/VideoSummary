@@ -2,7 +2,7 @@ import yt_dlp
 
 
 def extract_video_info(video_url):
-    """Extracts video info including subtitles and direct video URL."""
+
     ydl_opts = {
         'writesubtitles': True,
         'writeautomaticsub': True,
