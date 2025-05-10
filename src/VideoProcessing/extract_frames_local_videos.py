@@ -1,69 +1,99 @@
 import cv2
-from src.VideoProcessing.ocr_text_extraction import extract_text_from_frame
+import string
+import re
+from textblob import TextBlob
+from src.VideoProcessing.ocr_text_extraction import extract_text_from_frame  # Make sure this function returns a string or ""
 
+def clean_ocr_text_with_format(ocr_text, apply_spellcheck=False):
+    if not ocr_text:
+        return ""
 
-def calculate_histogram_diff(frame1, frame2):
-    gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
-    gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-    hist1 = cv2.calcHist([gray1], [0], None, [256], [0, 256])
-    hist2 = cv2.calcHist([gray2], [0], None, [256], [0, 256])
-    cv2.normalize(hist1, hist1)
-    cv2.normalize(hist2, hist2)
-    diff = cv2.compareHist(hist1, hist2, cv2.HISTCMP_BHATTACHARYYA)
-    return diff
+    cleaned_lines = []
 
+    for line in ocr_text.splitlines():
+        match = re.match(r"^(\s*)(.*)", line)
+        indent, content = match.groups()
 
-def extract_significant_ocr_frames(video_path, hist_threshold=0.1, target_fps=2):
+        content = ''.join(c for c in content if c in string.printable)
+
+        replacements = {
+            '0': 'O',
+            '1': 'I',
+            'ﬁ': 'fi',
+            'ﬂ': 'fl'
+        }
+        for wrong, right in replacements.items():
+            content = content.replace(wrong, right)
+
+        if sum(c.isalpha() for c in content) < 3:
+            continue
+
+        if apply_spellcheck:
+            content = str(TextBlob(content).correct())
+
+        cleaned_lines.append(f"{indent}{content}")
+
+    return '\n'.join(cleaned_lines)
+
+def get_timestamp_millis(frame_index, fps):
+    return int((frame_index / fps) * 1000)
+
+def compute_hist_diff(prev_gray, curr_gray):
+    prev_hist = cv2.calcHist([prev_gray], [0], None, [256], [0, 256])
+    curr_hist = cv2.calcHist([curr_gray], [0], None, [256], [0, 256])
+    return cv2.compareHist(prev_hist, curr_hist, cv2.HISTCMP_BHATTACHARYYA)
+
+def stream_and_collect_frames(video_path, hist_thresh=0.3, frame_skip=3):
     cap = cv2.VideoCapture(video_path)
-    actual_fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_skip = max(int(actual_fps // target_fps), 1)
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video: {video_path}")
 
-    results = []
-    prev_frame = None
-    frame_idx = 0
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_index = 0
+    prev_gray = None
+    extracted_frames = []
 
-    while cap.isOpened():
+    while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        if frame_idx % frame_skip != 0:
-            frame_idx += 1
+        if frame_index % frame_skip != 0:
+            frame_index += 1
             continue
 
-        timestamp = frame_idx / actual_fps
-        cv2.imshow("Current Frame", frame)
-        cv2.waitKey(1)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        save_this = False
 
-        if prev_frame is not None:
-            diff = calculate_histogram_diff(prev_frame, frame)
-            if diff >= hist_threshold:
-                print(f"[INFO] Significant frame @ {timestamp:.2f}s (diff={diff:.3f})")
-                try:
-                    ocr_result = extract_text_from_frame(frame)
-                    texts = []
-                    if ocr_result and isinstance(ocr_result[0], list):
-                        texts = [line[1][0] for line in ocr_result[0] if line and len(line) > 1]
-                    print("text: ",texts)
-                    if texts:
-                        results.append({
-                            "timestamp": round(timestamp, 2),
-                            "text": " ".join(texts)
-                        })
-                except Exception as e:
-                    print(f"[WARN] OCR failed at frame {frame_idx}: {e}")
+        if prev_gray is None:
+            save_this = True
+        else:
+            hist_diff = compute_hist_diff(prev_gray, gray)
+            if hist_diff > hist_thresh:
+                save_this = True
 
-        prev_frame = frame
-        frame_idx += 1
+        if save_this:
+            timestamp_ms = get_timestamp_millis(frame_index, fps)
+            extracted_frames.append((timestamp_ms, frame.copy()))
+            prev_gray = gray
+
+        frame_index += 1
 
     cap.release()
-    cv2.destroyAllWindows()
+    return run_ocr_on_frames(extracted_frames)
+
+def run_ocr_on_frames(frames_with_timestamps):
+    results = []
+    for timestamp_ms, frame in frames_with_timestamps:
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        try:
+            ocr_result = extract_text_from_frame(img_rgb)
+        except Exception as e:
+            print(f"OCR failed at {timestamp_ms} ms: {e}")
+            ocr_result = ""
+
+        cleaned_text = clean_ocr_text_with_format(ocr_result)
+        results.append((timestamp_ms, cleaned_text))
     return results
 
 
-if __name__ == "__main__":
-    video_path = "../input.mp4"
-    results = extract_significant_ocr_frames(video_path, hist_threshold=0.35, target_fps=2)
-    print("res: ",results)
-    for r in results:
-        print(f"[{r['timestamp']}s] {r['text']}")

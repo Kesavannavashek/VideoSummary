@@ -1,6 +1,6 @@
 from paddleocr import PaddleOCR
 import logging
-# logging.getLogger('ppocr').setLevel(logging.ERROR)
+logging.getLogger('ppocr').setLevel(logging.ERROR)
 
 ocr = PaddleOCR(
     use_angle_cls=True,
@@ -12,9 +12,17 @@ ocr = PaddleOCR(
     use_space_char=True
 )
 
-
+# ocr = PaddleOCR(
+#     det_model_dir='en_PP-OCRv4_det',
+#     rec_model_dir='en_PP-OCRv4_rec',
+#     use_angle_cls=False,  # turn off for speed if not needed
+#     lang='en',
+#     use_gpu=True,
+#     precision='fp16'
+# )
 def extract_text_from_frame(frame):
     result = ocr.ocr(frame, cls=True)
+    # print("result: ",result)
     if not result or not result[0]:
         return None
 
@@ -24,6 +32,7 @@ def extract_text_from_frame(frame):
 
     for line in lines:
         text = line[1][0]
+        # print("TEXT: ",text)
         x_positions = [pt[0] for pt in line[0]]
         min_x = min(x_positions)
 
@@ -42,9 +51,34 @@ def match_subs_with_ocr(subs, ocr_data):
         collected_texts = [ocr_text for ts, ocr_text in ocr_data if start <= ts <= end]
 
         if collected_texts:
-            matched.append((text, tuple(collected_texts)))
+            matched.append((text,collected_texts))
         else:
-            matched.append((text, ()))
-
+            matched.append((text, []))
+    print("Matched: ",matched)
     return matched
+
+
+def combine_matched_chunks(matched_data, max_words=1000):
+    combined = []
+    buffer_text = ""
+    buffer_ocr = []
+    word_count = 0
+
+    for text, ocrs in matched_data:
+        total_new_words = len(text.split()) + sum(len(ocr.split()) for ocr in ocrs)
+        if word_count + total_new_words <= max_words:
+            buffer_text += "\n" + text
+            buffer_ocr.extend(ocrs)
+            word_count += total_new_words
+        else:
+            combined.append((buffer_text.strip(), buffer_ocr))
+            buffer_text = text
+            buffer_ocr = ocrs
+            word_count = total_new_words
+
+    if buffer_text:
+        combined.append((buffer_text.strip(), buffer_ocr))
+
+    return combined
+
 

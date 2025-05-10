@@ -4,11 +4,15 @@ import cv2
 from src.VideoProcessing.ocr_text_extraction import extract_text_from_frame
 
 
-def histogram_diff(img1, img2):
-
-    hist1 = cv2.calcHist([img1], [0], None, [256], [0, 256])
-    hist2 = cv2.calcHist([img2], [0], None, [256], [0, 256])
-    return cv2.compareHist(hist1, hist2, cv2.HISTCMP_BHATTACHARYYA)
+def histogram_diff(frame1, frame2):
+    gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+    hist1 = cv2.calcHist([gray1], [0], None, [256], [0, 256])
+    hist2 = cv2.calcHist([gray2], [0], None, [256], [0, 256])
+    cv2.normalize(hist1, hist1)
+    cv2.normalize(hist2, hist2)
+    diff = cv2.compareHist(hist1, hist2, cv2.HISTCMP_BHATTACHARYYA)
+    return diff
 
 def extract_frames_from_video(video_url, frame_rate=1):
 

@@ -1,15 +1,16 @@
 from src.AudioSubtitleProcessing.chunk_text import chunk_text
-from src.AudioSubtitleProcessing.extact_subtitles import get_subtitle_text, get_timestamped_chunks
-from src.AudioSubtitleProcessing.extract_speech import transcribe_audio_from_youtube
+from src.AudioSubtitleProcessing.extact_subtitles import get_subtitle_text, get_timestamped_chunks, extract_text_for_spacy
+from src.AudioSubtitleProcessing.extract_speech import transcribe_youtube_video
 from src.GetVideoInfo.get_video_info import extract_video_info,get_video_direct_url
 from src.SummaryGeneration.generate_summary import summarize_matched_data
 from src.VideoProcessing.extract_frames import extract_frames_from_video
+from src.VideoProcessing.extract_frames_local_videos import stream_and_collect_frames
 from src.VideoProcessing.ocr_text_extraction import match_subs_with_ocr
 
 
 def pipeline(video_url):
+    isAudio = False
     info = extract_video_info(video_url)
-    # print("INFO: ",info)
     direct_url = get_video_direct_url(info)
     print("subtitle info are retrieved...")
     if(direct_url == None):
@@ -17,23 +18,24 @@ def pipeline(video_url):
         return
     text = get_subtitle_text(info)
     if not text:
+        isAudio = True
         print("No subtitles found. Using Whisper to transcribe...")
-        text = transcribe_audio_from_youtube(video_url)
-    # print(text)
-    chunks = chunk_text(text)
-    # for chunk in chunks:
-    #     print("chunk: ",chunk)
-    timestamped_chunks = get_timestamped_chunks(info,chunks)
+        text = transcribe_youtube_video(video_url)
+    if not isAudio:
+        text = extract_text_for_spacy(text)
+        chunks = chunk_text(text)
+        timestamped_chunks = get_timestamped_chunks(info,chunks)
     print("time stamped chunks are retrieved...")
     print("starting ocr extraction...")
-    ocr_data = extract_frames_from_video(direct_url)
+    ocr_data = stream_and_collect_frames(direct_url)
     print("ocr data extracted...")
     print("syncing subtitles with ocr data...")
+    print(timestamped_chunks)
+    print(ocr_data)
     matched_data = match_subs_with_ocr(timestamped_chunks, ocr_data)
     print("successfully synced subtitles with ocr data...")
     print("summarizing.....")
-    return summarize_matched_data(matched_data)
-
+    return summarize_matched_data(matched_data, context="youtube")
 
 if __name__ == "__main__":
     # url = "https://youtu.be/4EP8YzcN0hQ?si=-lfdX62fpjkgvq8O"
