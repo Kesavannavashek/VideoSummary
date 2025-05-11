@@ -55,8 +55,6 @@ async def pipeline(video_url: str, websocket: WebSocket = None):
         await send_status(websocket, "[STATUS]🚀 Launching tasks...")
 
         # Run extraction and OCR in parallel
-        await send_status(websocket, "[STATUS]🖼️ OCR Extraction in progress...")
-
         text_proc_task = extract_text_and_timestamps(info, video_url, websocket)
         ocr_task = asyncio.to_thread(stream_and_collect_frames, direct_url)
 
@@ -64,11 +62,13 @@ async def pipeline(video_url: str, websocket: WebSocket = None):
         ocr_data = await ocr_task
 
         await send_status(websocket, "[STATUS]🖼️ OCR data extracted...")
-        matched_data = await match_subs_with_ocr(timestamped_chunks, ocr_data)
+        matched_data = match_subs_with_ocr(timestamped_chunks, ocr_data)
         await send_status(websocket, "[STATUS]🔗 Matching OCR with subtitle data...")
-
+        print("here1")
         await send_status(websocket, "[STATUS]🧠 Generating summary...")
-        await summarize_matched_data(matched_data,websocket=websocket,batch_size=1, context="youtube", title=video_title)
+        print("here2")
+
+        await summarize_matched_data(matched_data,websocket=websocket ,title=video_title)
 
         await send_status(websocket, f"[STATUS]✅ Summary generated successfully.")
 

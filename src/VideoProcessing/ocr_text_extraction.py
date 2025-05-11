@@ -44,17 +44,20 @@ def extract_text_from_frame(frame):
     formatted_text = "\n".join(formatted_lines)
     return formatted_text
 
-async def match_subs_with_ocr(subs, ocr_data):
+def match_subs_with_ocr(subs, ocr_data):
     subs = [(d['start'], d['end'], d['text']) for d in subs if d]
     matched = []
     for start, end, text in subs:
         collected_texts = [ocr_text for ts, ocr_text in ocr_data if start <= ts <= end]
 
-        if collected_texts:
-            matched.append((text,collected_texts))
-        else:
-            matched.append((text, []))
-    print("Matched: ",matched)
+        matched.append({
+            "start": start,
+            "end": end,
+            "text": text,
+            "ocr_texts": collected_texts
+        })
+
+    print("Matched:", matched)
     return matched
 
 
