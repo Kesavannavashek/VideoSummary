@@ -9,7 +9,7 @@ def chunk_text(input_text):
 
     return [chunk.text for chunk in chunks]
 
-def split_text_for_local(chunks):
+def split_text_spacy(chunks):
     result = []
 
     for start, end, text in chunks:

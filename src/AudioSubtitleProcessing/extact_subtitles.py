@@ -3,6 +3,7 @@ import json
 
 
 def get_subtitle_text(info):
+    # print(info)
     for source in [info.get("subtitles", {}), info.get("automatic_captions", {})]:
         english = source.get("en")
         if english:

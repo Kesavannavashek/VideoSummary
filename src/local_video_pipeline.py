@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from src.AudioSubtitleProcessing.extract_speech import transcribe_local_video
-from src.AudioSubtitleProcessing.chunk_text import split_text_for_local, batch_chunks_duration_range
+from src.AudioSubtitleProcessing.chunk_text import split_text_spacy, batch_chunks_duration_range
 from src.VideoProcessing.extract_frames_local_videos import stream_and_collect_frames
 from src.VideoProcessing.ocr_text_extraction import match_subs_with_ocr
 from src.SummaryGeneration.generate_summary import summarize_matched_data
@@ -31,7 +31,7 @@ def local_video_pipeline(video_path):
         print("OCR extracted...")
 
         # Process subtitle text
-        chunked_text = split_text_for_local(subtitle)
+        chunked_text = split_text_spacy(subtitle)
         print("Subtitle chunked:", chunked_text)
 
         timed_chunk = batch_chunks_duration_range(chunked_text)

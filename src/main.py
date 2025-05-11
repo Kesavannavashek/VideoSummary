@@ -1,13 +1,13 @@
 import asyncio
-
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
+from src.youtube_pipeline import pipeline
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from fastapi import File, UploadFile
 import shutil
 import os
 import time
 from pathlib import Path
-
+from src.youtube_pipeline import send_status
 app = FastAPI()
 
 # Global variable to store WebSocket connection
@@ -28,61 +28,54 @@ UPLOAD_DIR = Path("uploaded_videos")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 
-# ---------- WebSocket Endpoint ----------
 @app.websocket("/ws/status")
 async def websocket_endpoint(websocket: WebSocket):
     global connection
-    await websocket.accept()
-
-    # Store the connection
-    connection = websocket
-    print("📥 WebSocket connected for video processing.")
 
     try:
-        # Simulate video processing
-        await process_video()
+        await websocket.accept()
+        print("📥 WebSocket connected.")
+        connection = websocket
+
+        while True:
+            # Keep the connection alive
+            await websocket.receive_text()
+
     except WebSocketDisconnect:
-        connection = None
         print("❌ WebSocket disconnected.")
-
-
-# ---------- Helper Functions for Processing Stages ----------
-async def process_video():
-    stages = [
-        "Video Downloading",
-        "Speech Extraction",
-        "OCR Extraction",
-        "Summary Generation",
-        "Processing Complete"
-    ]
-
-    # Simulate processing each stage with delays
-    for stage in stages:
-        await send_status_update(stage)
-        await asyncio.sleep(2)  # Simulate time delay for each stage
-
-    print("✅ Processing complete.")
-
-
-# Function to send real-time status updates via WebSocket
-async def send_status_update(status: str):
-    if connection:
-        await connection.send_text(f"Video processing status: {status}")
-    else:
-        print(f"❌ No active WebSocket connection.")
-
+        connection = None
 
 # ---------- File Upload Endpoint ----------
 @app.post("/upload_video")
 async def upload_video(file: UploadFile = File(...)):
     video_path = UPLOAD_DIR / file.filename
 
-    # Save the uploaded file
     with video_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     print(f"📥 Uploaded file saved to: {video_path}")
     return JSONResponse(content={"status": "upload_successful", "file_path": str(video_path)})
+
+# ---------- YouTube URL Submission Endpoint ----------
+@app.post("/submit_youtube_url")
+async def submit_youtube_url(request: Request):
+    global connection
+    data = await request.json()
+    youtube_url = data.get("url")
+
+    if not youtube_url:
+        return JSONResponse(content={"error": "Missing 'url' field"}, status_code=400)
+
+    await send_status(connection,f"[STATUS]📥 Received YouTube URL: {youtube_url}")
+
+    if connection:
+        await pipeline(youtube_url, connection)
+    else:
+        print("❌ No active WebSocket connection.")
+        return JSONResponse(content={"error": "No active WebSocket connection"}, status_code=400)
+
+    return JSONResponse(content={"status": "url_received", "url": youtube_url})
+
 
 
 # ---------- Running the FastAPI server ----------

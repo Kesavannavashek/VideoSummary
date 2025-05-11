@@ -17,26 +17,39 @@ model = AutoModelForCausalLM.from_pretrained(
 
 print(f"Model loaded on: {model.device}")
 
-def build_prompt(text, ocr_texts=None, context="youtube"):
+
+def build_prompt(text,title, ocr_texts=None, context="youtube" ):
     base_instruction = (
-        "Explain the following youtube chunk of the video:"
+        f"Summarize the following part of {title} youtube video:"
         if context == "youtube"
-        else "Explain this part of video:"
+        else "Summarize this part of video:"
     )
     prompt = f"<|user|>\n{base_instruction}\n\n{text}\n"
+
+    MAX_OCR_CHARS = 1000
+
     if ocr_texts:
-        ocr_content = "\n".join(ocr_texts)
-        prompt += f"Additional OCR context:\n{ocr_content}\n"
+        content = []
+        total = 0
+
+        for ocr in ocr_texts:
+            if total + len(ocr) > MAX_OCR_CHARS:
+                break
+            content.append(ocr)
+            total += len(ocr)
+
+        ocr_content = "\n".join(content)
+        prompt += f"With help of this OCR:\n{ocr_content}\n"
+
     prompt += "<|assistant|>\n"
     return prompt
 
 
-def summarize_matched_data(matched_data, context, batch_size=14):
-    prompts = [build_prompt(text, ocr_texts, context) for text, ocr_texts in matched_data]
-    summaries = []
+async def summarize_matched_data(matched_data, context, websocket, batch_size=14, title=None):
+    prompts = [build_prompt(text, title, ocr_texts, context) for text, ocr_texts in matched_data]
 
     for i in range(0, len(prompts), batch_size):
-        batch_prompts = prompts[i:i+batch_size]
+        batch_prompts = prompts[i:i + batch_size]
         inputs = tokenizer(
             batch_prompts,
             return_tensors="pt",
@@ -63,6 +76,5 @@ def summarize_matched_data(matched_data, context, batch_size=14):
         for decoded in decoded_batch:
             summary = decoded.split("<|assistant|>")[-1].strip()
             print("Summary:", summary)
-            summaries.append(summary)
+            await websocket.send_text(f"[SUMMARY]{summary}")
 
-    return summaries

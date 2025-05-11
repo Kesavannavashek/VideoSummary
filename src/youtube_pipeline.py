@@ -1,47 +1,90 @@
-from src.AudioSubtitleProcessing.chunk_text import chunk_text
-from src.AudioSubtitleProcessing.extact_subtitles import get_subtitle_text, get_timestamped_chunks, extract_text_for_spacy
+import asyncio
+from starlette.websockets import WebSocket, WebSocketState
+import time
+from src.AudioSubtitleProcessing.chunk_text import chunk_text, split_text_spacy
+from src.AudioSubtitleProcessing.extact_subtitles import (
+    get_subtitle_text,
+    get_timestamped_chunks,
+    extract_text_for_spacy,
+)
 from src.AudioSubtitleProcessing.extract_speech import transcribe_youtube_video
-from src.GetVideoInfo.get_video_info import extract_video_info,get_video_direct_url
+from src.GetVideoInfo.get_video_info import extract_video_info, get_video_direct_url
 from src.SummaryGeneration.generate_summary import summarize_matched_data
-from src.VideoProcessing.extract_frames import extract_frames_from_video
 from src.VideoProcessing.extract_frames_local_videos import stream_and_collect_frames
 from src.VideoProcessing.ocr_text_extraction import match_subs_with_ocr
 
+# --- Safe WebSocket messaging ---
+async def send_status(websocket, message: str):
+    if websocket and websocket.application_state == WebSocketState.CONNECTED:
+        try:
+            await websocket.send_text(message)
+        except Exception as e:
+            print(f"[WebSocket Send Error] {e}")
+    else:
+        print(f"[WebSocket Closed] {message}")
 
-def pipeline(video_url):
+# --- Subtitle/Audio Text Extraction ---
+async def extract_text_and_timestamps(info, video_url, websocket):
     isAudio = False
-    info = extract_video_info(video_url)
-    direct_url = get_video_direct_url(info)
-    print("subtitle info are retrieved...")
-    if(direct_url == None):
-        print("No URL found....")
-        return
     text = get_subtitle_text(info)
+
     if not text:
         isAudio = True
-        print("No subtitles found. Using Whisper to transcribe...")
+        await send_status(websocket, "[STATUS]No subtitles found. Using Whisper to transcribe...")
         text = transcribe_youtube_video(video_url)
-    if not isAudio:
+        text = split_text_spacy(text)
+        return text, [], isAudio
+    else:
         text = extract_text_for_spacy(text)
         chunks = chunk_text(text)
-        timestamped_chunks = get_timestamped_chunks(info,chunks)
-    print("time stamped chunks are retrieved...")
-    print("starting ocr extraction...")
-    ocr_data = stream_and_collect_frames(direct_url)
-    print("ocr data extracted...")
-    print("syncing subtitles with ocr data...")
-    print(timestamped_chunks)
-    print(ocr_data)
-    matched_data = match_subs_with_ocr(timestamped_chunks, ocr_data)
-    print("successfully synced subtitles with ocr data...")
-    print("summarizing.....")
-    return summarize_matched_data(matched_data, context="youtube")
+        timestamped_chunks = get_timestamped_chunks(info, chunks)
+        await send_status(websocket, "[STATUS]Chunks are timestamped...")
+        return text, timestamped_chunks, isAudio
+
+# --- Main Pipeline ---
+async def pipeline(video_url: str, websocket: WebSocket = None):
+    try:
+        info = extract_video_info(video_url)
+        video_title = info["title"]
+        direct_url = get_video_direct_url(info)
+
+        if not direct_url:
+            await send_status(websocket, "[STATUS]❌ Not a YouTube video URL. Quitting.")
+            return
+
+        await send_status(websocket, "[STATUS]🚀 Launching tasks...")
+
+        # Run extraction and OCR in parallel
+        await send_status(websocket, "[STATUS]🖼️ OCR Extraction in progress...")
+
+        text_proc_task = extract_text_and_timestamps(info, video_url, websocket)
+        ocr_task = asyncio.to_thread(stream_and_collect_frames, direct_url)
+
+        text, timestamped_chunks, isAudio = await text_proc_task
+        ocr_data = await ocr_task
+
+        await send_status(websocket, "[STATUS]🖼️ OCR data extracted...")
+        matched_data = await match_subs_with_ocr(timestamped_chunks, ocr_data)
+        await send_status(websocket, "[STATUS]🔗 Matching OCR with subtitle data...")
+
+        await send_status(websocket, "[STATUS]🧠 Generating summary...")
+        await summarize_matched_data(matched_data,websocket=websocket,batch_size=1, context="youtube", title=video_title)
+
+        await send_status(websocket, f"[STATUS]✅ Summary generated successfully.")
+
+
+    except Exception as e:
+        await send_status(websocket, f"[STATUS]❌ Error occurred: {str(e)}")
+
+
 
 if __name__ == "__main__":
     # url = "https://youtu.be/4EP8YzcN0hQ?si=-lfdX62fpjkgvq8O"
-    # url = "https://youtu.be/ldYLYRNaucM?si=ximNENy042FR06sR"
-    url = "https://youtu.be/CPk8pffKV64?si=oPERlnocqOwfuCxW"
+    url = "https://youtu.be/ldYLYRNaucM?si=ximNENy042FR06sR"
+    s = time.time()
+    # url = "https://youtu.be/CPk8pffKV64?si=oPERlnocqOwfuCxW"
     matchedData = pipeline(url)
+    print("Total Time:", time.time() - s)
     print("summary: ",matchedData)
 
 
