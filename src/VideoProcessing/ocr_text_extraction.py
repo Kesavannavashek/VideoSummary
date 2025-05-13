@@ -3,7 +3,7 @@ import logging
 logging.getLogger('ppocr').setLevel(logging.ERROR)
 
 ocr = PaddleOCR(
-    use_angle_cls=True,
+    use_angle_cls=False,
     use_gpu=True,
     det_db_box_thresh=0.2,
     rec_algorithm='CRNN',

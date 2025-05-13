@@ -261,16 +261,16 @@ model = AutoModelForCausalLM.from_pretrained(
 
 print(f"Model loaded on: {model.device}")
 
-def build_prompt(sub_text, title, ocr_texts):
-    ocr_context = " ".join(ocr_texts) if ocr_texts else "none"
+def build_prompt(sub_text, title, ocr_texts, ocr_limit=30):
+    limited_ocr = " ".join(ocr_texts[:ocr_limit]) if ocr_texts else "none"
     return (
-        f"Below is a transcript of a video segment.\n"
-        f"Your task is to write a short and clear summary.\n\n"
-        f"Title: {title or 'Untitled'}\n"
-        f"Visuals: {ocr_context}\n"
-        f"Transcript: {sub_text}\n\n"
+        f"OCR: {limited_ocr}\n"
+        f"Transcript: {sub_text}\n"
+        f"Summarize the following part of video with help of OCR.\n"
         f"Summary:"
     )
+
+
 
 def clean_summary(text):
     # Remove echoed prompt
@@ -339,7 +339,7 @@ async def summarize_matched_data(matched_data, websocket, batch_size=8, title=No
             print(f"Processing batch {i // batch_size + 1} of {(len(prompts) - 1) // batch_size + 1}")
             batch_summaries = await process_batch(batch)
             all_summaries.extend(batch_summaries)
-
+            print("summary: ",batch_summaries)
             await websocket.send_json(batch_summaries)
 
         await websocket.send_json({"status": "Summary generated successfully."})

@@ -44,6 +44,7 @@ def compute_hist_diff(prev_gray, curr_gray):
     return cv2.compareHist(prev_hist, curr_hist, cv2.HISTCMP_BHATTACHARYYA)
 
 def stream_and_collect_frames(video_path, hist_thresh=0.3, frame_skip=3):
+    print("stream started...")
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise IOError(f"Cannot open video: {video_path}")
@@ -80,6 +81,7 @@ def stream_and_collect_frames(video_path, hist_thresh=0.3, frame_skip=3):
         frame_index += 1
 
     cap.release()
+    print("Frames Extracted...")
     return run_ocr_on_frames(extracted_frames)
 
 def run_ocr_on_frames(frames_with_timestamps):
